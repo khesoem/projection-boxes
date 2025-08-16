@@ -476,7 +476,7 @@ export default function ProjectionBoxesDemo() {
         </Card>
       </div>
 
-      <div className="text-xs text-neutral-500">Tip: 1=Full, 2=Stealth. Click or move the caret in the editor to change the focus line. Boxes update after you press Run.</div>
+      <div className="text-xs text-neutral-500">Tip: Hover over code lines to see variable values. Press 1=Full view, 2=Stealth mode. Run code to see execution data.</div>
     </div>
   );
 }
