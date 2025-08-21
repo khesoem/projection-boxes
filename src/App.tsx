@@ -1,209 +1,23 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { RefreshCcw, Play, Grid } from "lucide-react";
+import { Crosshair, Play, Grid, GitBranch } from "lucide-react";
 
-// --- Lightweight UI helpers (Tailwind) ---
-const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ className = "", children, ...rest }) => (
-  <button className={`px-3 py-2 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 transition ${className}`} {...rest}>{children}</button>
-);
-const Card: React.FC<{ className?: string; children: React.ReactNode }> = ({ className = "", children }) => (
-  <div className={`bg-white rounded-2xl border border-neutral-200 ${className}`}>{children}</div>
-);
-const CardContent: React.FC<{ className?: string; children: React.ReactNode }> = ({ className = "", children }) => (
-  <div className={`p-4 ${className}`}>{children}</div>
-);
-const Toggle: React.FC<{ pressed?: boolean; onPressedChange?: (v: boolean) => void; className?: string; children: React.ReactNode }> = ({ pressed, onPressedChange, className = "", children }) => (
-  <button
-    onClick={() => onPressedChange && onPressedChange(!pressed)}
-    className={`px-3 py-2 rounded-2xl border transition ${pressed ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-800 border-neutral-300 hover:bg-neutral-50'} ${className}`}
-  >{children}</button>
-);
-
-
-// --- Utility types ---
-type TraceRow = { line: number; vars: Record<string, string> };
-type Box = { line: number; rows: TraceRow[] };
-
-type ViewMode = "full" | "summary" | "row" | "stealth";
-
-type Orientation = "columns" | "rows"; // columns: variables across columns; rows: variables down rows (Victor-style)
-
-// --- Sample Python program (inspired by the paper) ---
-const SAMPLE = `def f():
-    a = [0, 2, 8, 1]
-    s, n = 0, 0
-    for x in a:
-        s = s + x
-        n = n + 1
-    avg = s / n
-    return avg
-
-print(f())`;
-
-// --- Pyodide Loader ---
-async function ensurePyodide(): Promise<any> {
-  const globalAny = globalThis as any;
-  if (globalAny.__pyodidePromise) return globalAny.__pyodidePromise;
-  globalAny.__pyodidePromise = new Promise(async (resolve, reject) => {
-    try {
-      if (!(globalAny as any).loadPyodide) {
-        const script = document.createElement("script");
-        script.src = "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js";
-        script.onload = async () => {
-          try {
-            const pyodide = await (globalThis as any).loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/" });
-            resolve(pyodide);
-          } catch (e) {
-            reject(e);
-          }
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-      } else {
-        const pyodide = await (globalThis as any).loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/" });
-        resolve(pyodide);
-      }
-    } catch (e) {
-      reject(e);
-    }
-  });
-  return globalAny.__pyodidePromise;
-}
-
-// Compute a simple diff of changed variables per line occurrence
-function computeChangedVars(rows: TraceRow[]): Set<string> {
-  const changed = new Set<string>();
-  let prev: Record<string, string> | null = null;
-  for (const r of rows) {
-    if (!prev) { prev = r.vars; continue; }
-    for (const k of Object.keys(r.vars)) {
-      if (!(k in prev) || prev[k] !== r.vars[k]) changed.add(k);
-    }
-    prev = r.vars;
-  }
-  return changed;
-}
-
-function useCaretLine(textareaRef: React.RefObject<HTMLTextAreaElement | null>): number | null {
-  const [line, setLine] = useState<number | null>(null);
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    
-    const handler = () => {
-      const pos = el.selectionStart || 0;
-      const pre = el.value.slice(0, pos);
-      setLine(pre.split("\n").length);
-    };
-    
-    // Only track on click and focus, not on every input
-    el.addEventListener("click", handler);
-    el.addEventListener("focus", handler);
-    
-    // Initial call
-    handler();
-    
-    return () => {
-      el.removeEventListener("click", handler);
-      el.removeEventListener("focus", handler);
-    };
-  }, [textareaRef]);
-  return line;
-}
-
-// --- Safer source injection: avoid manual escaping by embedding JSON literal ---
-function buildPythonDriverSource(userCode: string): string {
-  const jsonSourceLiteral = JSON.stringify(userCode);
-  return `
-import sys, json, ast
-trace_data = []
-
-# Function to capture variable state
-def __capture_state(line_num, frame):
-    d = {}
-    try:
-        # Get local variables from the frame, filtering out built-ins and globals
-        for k, v in frame.f_locals.items():
-            # Skip built-in variables and special variables
-            if k.startswith('__') or k in ['__builtins__', '__name__', '__doc__', '__package__', '__loader__', '__spec__']:
-                continue
-            # Skip if it's a built-in function or class
-            if hasattr(v, '__module__') and v.__module__ == 'builtins':
-                continue
-            # Skip function objects (including user-defined functions)
-            if callable(v):
-                continue
-            try:
-                d[k] = repr(v)
-            except Exception:
-                try:
-                    d[k] = str(v)
-                except Exception:
-                    d[k] = '<unrepr>'
-    except Exception:
-        pass
-    # Only add to trace_data if we have actual user variables
-    if d:
-        trace_data.append({'line': line_num, 'vars': d})
-
-# Custom tracer that should work better in Pyodide
-def __tracer(frame, event, arg):
-    if event == 'line':
-        # Only trace lines in user code
-        if hasattr(frame, 'f_code') and hasattr(frame.f_code, 'co_filename'):
-            if frame.f_code.co_filename == '<user>' or frame.f_code.co_filename == '<string>':
-                # For now, let's use the frame line number directly
-                # We'll need to map this to the correct source line
-                __capture_state(frame.f_lineno, frame)
-    return __tracer
-
-from io import StringIO
-__buf = StringIO()
-__old_stdout = sys.stdout
-sys.stdout = __buf
-
-__err = None
-
-# --- run user's program with tracing ---
-def __run_user():
-    __g = {}
-    __source = ${jsonSourceLiteral}
-    
-    # Try to set up tracing
-    try:
-        sys.settrace(__tracer)
-        exec(compile(__source, '<user>', 'exec'), __g, __g)
-    except Exception as e:
-        print(f"Tracing failed: {e}")
-        # Fallback: execute without tracing
-        exec(compile(__source, '<user>', 'exec'), __g, __g)
-    finally:
-        sys.settrace(None)
-
-try:
-    __run_user()
-except Exception as e:
-    __err = repr(e)
-finally:
-    sys.stdout = __old_stdout
-
-# Debug: print trace data to see if it's working
-print("DEBUG: trace_data length:", len(trace_data))
-for i, item in enumerate(trace_data):
-    print(f"DEBUG: trace[{i}] = {item}")
-
-# Convert to JSON for easier JavaScript access
-import json
-trace_data_json = json.dumps(trace_data)
-`;
-}
+// Import extracted components and utilities
+import { Button, Card, CardContent, Toggle } from "./components/ui";
+import { StatusDot } from "./components/StatusDot";
+import { ProjectionBox } from "./components/ProjectionBox";
+import { useCaretLine } from "./hooks/useCaretLine";
+import { ensurePyodide, buildPythonDriverSource, extractUsedNamesFromPythonLine } from "./utils/python";
+import { runDataFlowAnalysis } from "./utils/dataFlow";
+import type { Box, ViewMode, Orientation, DataFlowRecord, Status } from "./types";
+import { SAMPLE } from "./constants";
 
 // Main component
 export default function ProjectionBoxesDemo() {
   const [code, setCode] = useState(SAMPLE);
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [stdout, setStdout] = useState<string>("");
-  const [status, setStatus] = useState<"idle" | "running" | "ok" | "error" | "modified">("idle");
+  const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("full");
   const [orientation, setOrientation] = useState<Orientation>("columns");
@@ -213,6 +27,10 @@ export default function ProjectionBoxesDemo() {
   const [lastExecutedCode, setLastExecutedCode] = useState<string>(SAMPLE);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const activeLine = useCaretLine(editorRef);
+
+  // State for data-flow analysis
+  const [dataFlowResults, setDataFlowResults] = useState<DataFlowRecord[]>([]);
+  const [dataFlowLoading, setDataFlowLoading] = useState(false);
 
   // Update status when code changes
   useEffect(() => {
@@ -228,14 +46,14 @@ export default function ProjectionBoxesDemo() {
     const onKey = (e: KeyboardEvent) => {
       if (e.target && (e.target as HTMLElement).tagName === "TEXTAREA") return;
       if (e.key === "1") setView("full");
-      if (e.key === "2") setView("stealth");
+      if (e.key === "2") setView("scoped");
+      if (e.key === "3") setView("dataflow");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const filteredBoxes = useMemo(() => {
-    if (view === "stealth") return [];
     let bs = boxes;
     // Summary view: show current line and last executed line only
     if (view === "summary") {
@@ -244,6 +62,27 @@ export default function ProjectionBoxesDemo() {
       if (activeLine) lines.add(activeLine);
       if (last != null) lines.add(last);
       bs = boxes.filter((b) => lines.has(b.line));
+    }
+    // Scoped view: for each line, only show variables that are referenced on that specific source line
+    if (view === "scoped") {
+      const codeLines = code.split("\n");
+      bs = bs.map((b) => {
+        const lineText = codeLines[b.line - 1] ?? "";
+        const used = extractUsedNamesFromPythonLine(lineText);
+        return {
+          line: b.line,
+          rows: b.rows.map((r) => ({
+            line: r.line,
+            vars: Object.fromEntries(Object.entries(r.vars).filter(([k]) => used.has(k)))
+          }))
+        };
+      });
+    }
+    // Data-flow view: show all variables with dependency analysis from dyn_flow.py
+    if (view === "dataflow") {
+      // This will be populated when data-flow analysis is complete
+      // For now, return the same as full view
+      bs = boxes;
     }
     // Row view uses variables as rows (Victor-like) later in rendering
     if (!appliedFilter.trim()) return bs;
@@ -261,10 +100,49 @@ export default function ProjectionBoxesDemo() {
         )),
       })),
     }));
-  }, [boxes, view, activeLine, appliedFilter]);
+  }, [boxes, view, activeLine, appliedFilter, code]);
+
+  // Run data-flow analysis when dataflow view is selected and we have execution data
+  useEffect(() => {
+    if (view === "dataflow" && status === "ok") {
+      // Only run analysis if we don't already have results for this code
+      if (dataFlowResults.length === 0 || lastExecutedCode !== code) {
+        setDataFlowLoading(true);
+        runDataFlowAnalysis(code)
+          .then(results => {
+            setDataFlowResults(results);
+          })
+          .catch(error => {
+            console.error("Data-flow analysis failed:", error);
+            setDataFlowResults([]);
+          })
+          .finally(() => {
+            setDataFlowLoading(false);
+          });
+      }
+    }
+  }, [view, status, code, dataFlowResults.length, lastExecutedCode]);
+
+  // Clear data-flow results when switching away from dataflow view
+  useEffect(() => {
+    if (view !== "dataflow") {
+      setDataFlowResults([]);
+      setDataFlowLoading(false);
+    }
+  }, [view]);
+
+  // Log when data-flow results change (for debugging)
+  useEffect(() => {
+    if (dataFlowResults.length > 0) {
+      console.log("Data-flow results updated:", dataFlowResults.length, "records");
+      console.log("Data-flow line numbers:", [...new Set(dataFlowResults.map(r => r.line))].sort((a, b) => a - b));
+      console.log("Execution line numbers:", [...new Set(dataFlowResults.map(r => r.execution))].sort((a, b) => a - b));
+      console.log("Variables in data-flow:", [...new Set(dataFlowResults.map(r => r.variable))]);
+    }
+  }, [dataFlowResults]);
 
   async function execute(codeToRun: string) {
-    const pyodide: any = await ensurePyodide();
+    const pyodide = await ensurePyodide();
     const driver = buildPythonDriverSource(codeToRun);
     console.log("Generated driver code:", driver);
     
@@ -274,14 +152,14 @@ export default function ProjectionBoxesDemo() {
       await pyodide.runPythonAsync(driver);
       const out = await pyodide.runPythonAsync(`__buf.getvalue()`);
       const err = await pyodide.runPythonAsync(`__err`);
-      const jsRows: any[] = await pyodide.runPythonAsync(`trace_data`);
+      const jsRows = await pyodide.runPythonAsync(`trace_data`);
       const traceDataJson = await pyodide.runPythonAsync(`trace_data_json`);
       
-      console.log("Execution results:", { out, err, jsRows, jsRowsLength: jsRows?.length });
+      console.log("Execution results:", { out, err, jsRows, jsRowsLength: Array.isArray(jsRows) ? jsRows.length : 0 });
       console.log("Trace data JSON:", traceDataJson);
       
       // Parse the JSON string to get proper JavaScript objects
-      const convertedRows = JSON.parse(traceDataJson);
+      const convertedRows = JSON.parse(String(traceDataJson));
       
       console.log("Converted rows:", convertedRows);
       
@@ -305,9 +183,9 @@ export default function ProjectionBoxesDemo() {
         setStatus("error");
       } else {
         // Group rows by line with line number mapping
-        const grouped = new Map<number, TraceRow[]>();
+        const grouped = new Map<number, Array<{ line: number; vars: Record<string, string> }>>();
         console.log("Raw rows data:", rows);
-        for (const r of rows as any[]) {
+        for (const r of rows as Array<{ line: number; vars: Record<string, string> }>) {
           console.log("Processing row:", r, "line type:", typeof r.line, "line value:", r.line);
           const originalLine = Number(r.line);
           console.log("Converted line number:", originalLine, "isNaN:", isNaN(originalLine));
@@ -324,24 +202,21 @@ export default function ProjectionBoxesDemo() {
         console.log("Processed boxes:", bs);
         console.log("Box details:", bs.map(b => ({ line: b.line, rowCount: b.rows.length, firstRowVars: b.rows[0]?.vars })));
         console.log("Available line numbers in boxes:", bs.map(b => b.line));
-        console.log("Sample code lines:", code.split('\\n').map((line, i) => `${i+1}: ${line}`));
+        console.log("Sample code lines:", code.split('\n').map((line, i) => `${i+1}: ${line}`));
+        console.log("Raw trace data:", rows);
         setBoxes(bs);
         setStatus("ok");
         setLastExecutedCode(code);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Run error:", e);
-      setError(String(e?.message || e));
+      setError(String(e instanceof Error ? e.message : e));
       setStatus("error");
     }
   }
 
-
-
   // Presentation helpers
   const lines = useMemo(() => code.split("\n"), [code]);
-
-
 
   return (
     <div className="w-full min-h-screen bg-neutral-50 p-6 flex flex-col gap-4">
@@ -349,7 +224,6 @@ export default function ProjectionBoxesDemo() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold">Projection Boxes – Web Prototype</h1>
-          <span className="text-sm text-neutral-500">(React + Pyodide)</span>
         </div>
         <div className="flex items-center gap-2">
           <StatusDot status={status} />
@@ -363,7 +237,12 @@ export default function ProjectionBoxesDemo() {
           <div className="flex items-center gap-2">
             <span className="text-sm text-neutral-600">View:</span>
             <Toggle pressed={view === "full"} onPressedChange={() => setView("full")} className="gap-2"><Grid className="w-4 h-4"/> Full</Toggle>
-            <Toggle pressed={view === "stealth"} onPressedChange={() => setView("stealth")} className="gap-2"><RefreshCcw className="w-4 h-4"/> Stealth</Toggle>
+            <Toggle pressed={view === "scoped"} onPressedChange={() => setView("scoped")} className="gap-2"><Crosshair className="w-4 h-4"/> Scoped</Toggle>
+            <Toggle pressed={view === "dataflow"} onPressedChange={() => setView("dataflow")} className="gap-2">
+              <GitBranch className="w-4 h-4"/> 
+              Data-flow
+              {dataFlowLoading && <span className="ml-1 text-xs text-blue-600">(analyzing...)</span>}
+            </Toggle>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-neutral-600">Orientation:</span>
@@ -391,11 +270,8 @@ export default function ProjectionBoxesDemo() {
               Apply
             </Button>
           </div>
-          
         </CardContent>
       </Card>
-
-
 
       {/* Editor + Projection layer */}
       <div className="grid md:grid-cols-2 gap-4">
@@ -456,6 +332,8 @@ export default function ProjectionBoxesDemo() {
                                 box={b}
                                 orientation={orientation}
                                 rowMode={view === "row"}
+                                viewMode={view}
+                                dataFlowResults={view === "dataflow" ? dataFlowResults : undefined}
                               />
                             ) : (
                               <div className="rounded-2xl shadow-sm bg-white ring-1 ring-neutral-200 p-4 text-xs text-neutral-500">
@@ -476,87 +354,17 @@ export default function ProjectionBoxesDemo() {
         </Card>
       </div>
 
-      <div className="text-xs text-neutral-500">Tip: Hover over code lines to see variable values. Press 1=Full view, 2=Stealth mode. Run code to see execution data.</div>
-    </div>
-  );
-}
-
-function StatusDot({ status }: { status: "idle" | "running" | "ok" | "error" | "modified" }) {
-  const color = status === "ok" ? "bg-green-500" : status === "running" ? "bg-amber-500 animate-pulse" : status === "error" ? "bg-red-500" : status === "modified" ? "bg-yellow-500" : "bg-neutral-300";
-  const label = status === "ok" ? "up-to-date" : status === "running" ? "running" : status === "error" ? "error" : status === "modified" ? "modified" : "idle";
-  return (
-    <div className="flex items-center gap-2 text-sm text-neutral-600">
-      <span className={`inline-block w-3 h-3 rounded-full ${color}`} />
-      {label}
-    </div>
-  );
-}
-
-function ProjectionBox({ box, orientation, rowMode }: { box: Box; orientation: Orientation; rowMode: boolean }) {
-  const allVars = useMemo(() => {
-    const names = new Set<string>();
-    for (const r of box.rows) for (const k of Object.keys(r.vars)) names.add(k);
-    return Array.from(names).sort();
-  }, [box]);
-
-  // In rowMode (Victor-like), show variables down rows and iterations across columns, but only for variables that changed at that line
-  const changedOnly = useMemo(() => computeChangedVars(box.rows), [box]);
-  const rowsForRender = rowMode ? Array.from(allVars).filter((v) => changedOnly.size === 0 || changedOnly.has(v)) : Array.from(allVars);
-
-  return (
-    <div className="rounded-2xl shadow-sm bg-white ring-1 ring-neutral-200 overflow-hidden">
-      <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-neutral-500 bg-neutral-50 flex items-center justify-between">
-        <span>Line {box.line}</span>
-        <span className="text-neutral-400">{rowMode ? "Row View" : "Full View"}</span>
+      <div className="text-xs text-neutral-500">
+        Tip: Hover over code lines to see variable values. Press 1=Full view, 2=Scoped mode, 3=Data-flow mode. Run code to see execution data.
+        {view === "dataflow" && dataFlowResults && dataFlowResults.length > 0 && (
+          <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+            <div className="font-medium text-blue-800 mb-1">Data-flow Legend:</div>
+            <div className="text-blue-700">
+              Geometric shapes show variable dependencies. For example, ● under variable 's' means 's' depends on variable 'a'.
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Orientation: columns (variables across columns) */}
-      {orientation === "columns" && !rowMode && (
-        <table className="w-full table-fixed text-xs">
-          <thead>
-            <tr className="bg-neutral-50">
-              <th className="px-2 py-1 text-right w-10">#</th>
-              {rowsForRender.map((v) => (
-                <th key={v} className="px-2 py-1 text-left truncate">{v}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {box.rows.map((r, i) => (
-              <tr key={i} className="odd:bg-white even:bg-neutral-50/60">
-                <td className="px-2 py-1 text-right text-neutral-500">{i + 1}</td>
-                {rowsForRender.map((v) => (
-                  <td key={v} className="px-2 py-1 font-mono whitespace-pre truncate align-top">{r.vars[v] ?? ""}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {/* Orientation: rows (variables down rows) or Victor-style */}
-      {(orientation === "rows" || rowMode) && (
-        <table className="w-full table-fixed text-xs">
-          <thead>
-            <tr className="bg-neutral-50">
-              <th className="px-2 py-1 text-left w-14">Var</th>
-              {box.rows.map((_, i) => (
-                <th key={i} className="px-2 py-1 text-right w-10">{i + 1}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rowsForRender.map((v) => (
-              <tr key={v} className="odd:bg-white even:bg-neutral-50/60">
-                <td className="px-2 py-1 text-left text-neutral-600">{v}</td>
-                {box.rows.map((r, i) => (
-                  <td key={i} className="px-2 py-1 font-mono whitespace-pre truncate align-top">{r.vars[v] ?? ""}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
     </div>
   );
 }

@@ -1,69 +1,77 @@
-# React + TypeScript + Vite
+# Projection Boxes - Web Prototype
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React-based web application for visualizing Python code execution with variable tracking and data-flow analysis. This project demonstrates the concept of "projection boxes" - a novel way to visualize program state during execution.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Real-time Python Execution**: Run Python code directly in the browser using Pyodide
+- **Variable Tracking**: See how variables change line-by-line during execution
+- **Multiple View Modes**:
+  - **Full View**: Shows all variables and their values
+  - **Scoped View**: Only shows variables referenced on each specific line
+  - **Data-flow View**: Visualizes variable dependencies with geometric shapes
+- **Interactive Controls**: Filter variables, change orientation, and customize the display
+- **Keyboard Shortcuts**: Press 1, 2, 3 for quick view switching
 
-## Expanding the ESLint configuration
+## Technology Stack
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Frontend**: React 19 + TypeScript + Vite
+- **Styling**: Tailwind CSS
+- **Animations**: Framer Motion
+- **Icons**: Lucide React
+- **Python Runtime**: Pyodide (Python in the browser)
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Getting Started
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+1. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+2. **Start development server**:
+   ```bash
+   npm run dev
+   ```
+
+3. **Open your browser** and navigate to `http://localhost:5173`
+
+## Usage
+
+1. **Write Python Code**: Use the editor on the left to write your Python code
+2. **Run Code**: Click the "Run" button to execute your code
+3. **Explore Variables**: Hover over code lines to see variable values in projection boxes
+4. **Switch Views**: Use the view controls to explore different visualization modes
+5. **Filter Variables**: Use the filter input to show/hide specific variables
+
+## Project Structure
+
+```
+src/
+├── components/          # React components
+│   ├── ProjectionBox.tsx    # Main visualization component
+│   ├── StatusDot.tsx        # Status indicator
+│   └── ui.tsx              # Reusable UI components
+├── hooks/               # Custom React hooks
+│   └── useCaretLine.ts     # Cursor position tracking
+├── utils/               # Utility functions
+│   ├── python.ts           # Python execution utilities
+│   └── dataFlow.ts         # Data-flow analysis
+├── types.ts             # TypeScript type definitions
+├── constants.ts         # Application constants
+├── App.tsx              # Main application component
+└── main.tsx             # Application entry point
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Development
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- **Build**: `npm run build`
+- **Lint**: `npm run lint`
+- **Preview**: `npm run preview`
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Research Context
+
+This project is inspired by research on program visualization and debugging tools. The "projection boxes" concept aims to make program state more visible and understandable during execution, particularly useful for educational and debugging purposes.
+
+## License
+
+This project is for research and educational purposes.
