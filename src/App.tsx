@@ -215,11 +215,12 @@ export default function ProjectionBoxesDemo() {
 
 
   return (
-    <div className="w-full min-h-screen bg-neutral-50 p-6 flex flex-col gap-4">
+    <div className="w-full min-h-screen bg-neutral-50 p-4 sm:p-6 flex flex-col gap-4">
+      <div className="max-w-6xl mx-auto w-full flex flex-col gap-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold">Enhanced Projection Boxes</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold">Enhanced Projection Boxes</h1>
         </div>
         <div className="flex items-center gap-2">
           <StatusDot status={status} />
@@ -246,7 +247,7 @@ export default function ProjectionBoxesDemo() {
             <Toggle pressed={orientation === "rows"} onPressedChange={() => setOrientation("rows")}>Rows</Toggle>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm text-neutral-600">Variables filter:</span>
             <input 
               value={filter} 
@@ -257,7 +258,7 @@ export default function ProjectionBoxesDemo() {
                 }
               }}
               placeholder="keep:^[snx] | del:^_" 
-              className="px-2 py-1 rounded border text-sm w-64"
+              className="px-2 py-1 rounded border text-sm w-48 sm:w-64"
             />
             <Button 
               onClick={() => setAppliedFilter(filter)} 
@@ -270,8 +271,8 @@ export default function ProjectionBoxesDemo() {
       </Card>
 
       {/* Unified Code Editor with Projection Boxes */}
-      <Card className="shadow-sm">
-        <CardContent className="p-0">
+        <Card className="shadow-sm">
+          <CardContent className="p-0">
           <UnifiedCodeEditor
             code={code}
             onCodeChange={setCode}
@@ -281,9 +282,10 @@ export default function ProjectionBoxesDemo() {
             dataFlowResults={view === "dataflow" ? dataFlowResults : undefined}
             stdout={stdout}
             error={error}
+            status={status}
           />
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
       <div className="text-xs text-neutral-500">
         Tip: Hover over code lines to see variable values. Press 1=Full view, 2=Scoped mode, 3=Data-flow mode. Run code to see execution data.
@@ -295,6 +297,7 @@ export default function ProjectionBoxesDemo() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

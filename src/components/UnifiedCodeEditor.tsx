@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { ProjectionBox } from "./ProjectionBox";
-import type { Box, ViewMode, Orientation, DataFlowRecord } from "../types";
+import type { Box, ViewMode, Orientation, DataFlowRecord, Status } from "../types";
 
 interface UnifiedCodeEditorProps {
   code: string;
@@ -12,6 +12,7 @@ interface UnifiedCodeEditorProps {
   dataFlowResults?: DataFlowRecord[];
   stdout: string;
   error: string | null;
+  status: Status;
 }
 
 export function UnifiedCodeEditor({
@@ -22,7 +23,8 @@ export function UnifiedCodeEditor({
   orientation,
   dataFlowResults,
   stdout,
-  error
+  error,
+  status
 }: UnifiedCodeEditorProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [hoverLine, setHoverLine] = useState<number | null>(null);
@@ -114,7 +116,7 @@ export function UnifiedCodeEditor({
           style={{
             top: '16px',
             right: '16px',
-            width: '400px',
+            width: '600px',
             maxWidth: 'calc(100% - 32px)'
           }}
           initial={{ opacity: 0, y: -4 }}
@@ -126,7 +128,8 @@ export function UnifiedCodeEditor({
               const activeLine = hoverLine || focusedLine;
               const box = getProjectionBox(activeLine!);
               
-              if (box) {
+              // Only show execution data if status is "ok" (code is up-to-date)
+              if (box && status === "ok") {
                 return (
                   <ProjectionBox
                     box={box}
@@ -138,10 +141,17 @@ export function UnifiedCodeEditor({
                 );
               } else {
                 return (
-                  <div className="rounded-2xl shadow-sm bg-white ring-1 ring-neutral-200 p-3 text-xs text-neutral-500">
-                    <div className="font-medium mb-1">Line {activeLine}</div>
-                    <div>No execution data available</div>
-                    <div className="text-[10px] mt-1">Run the code to see variable values</div>
+                  <div className="rounded-2xl shadow-sm bg-white ring-1 ring-neutral-200 overflow-hidden">
+                    <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-neutral-500 bg-neutral-50 flex items-center justify-between">
+                      <span>Line {activeLine}</span>
+                      <span className="text-neutral-400">No Data</span>
+                    </div>
+                    <div className="p-4 text-xs text-neutral-500">
+                      <div className="mb-2">No execution data available</div>
+                      {status !== "ok" && (
+                        <div className="text-[10px] text-neutral-400">Run the code to see variable values</div>
+                      )}
+                    </div>
                   </div>
                 );
               }
