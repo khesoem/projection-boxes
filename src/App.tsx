@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import { Crosshair, Play, Grid, GitBranch } from "lucide-react";
 
 // Import extracted components and utilities
 import { Button, Card, CardContent, Toggle } from "./components/ui";
 import { StatusDot } from "./components/StatusDot";
-import { ProjectionBox } from "./components/ProjectionBox";
+import { UnifiedCodeEditor } from "./components/UnifiedCodeEditor";
 import { useCaretLine } from "./hooks/useCaretLine";
 import { ensurePyodide, buildPythonDriverSource, extractUsedNamesFromPythonLine } from "./utils/python";
 import { runDataFlowAnalysis } from "./utils/dataFlow";
@@ -23,7 +22,6 @@ export default function ProjectionBoxesDemo() {
   const [orientation, setOrientation] = useState<Orientation>("columns");
   const [filter, setFilter] = useState<string>("");
   const [appliedFilter, setAppliedFilter] = useState<string>("");
-  const [hoverLine, setHoverLine] = useState<number | null>(null);
   const [lastExecutedCode, setLastExecutedCode] = useState<string>(SAMPLE);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const activeLine = useCaretLine(editorRef);
@@ -215,8 +213,6 @@ export default function ProjectionBoxesDemo() {
     }
   }
 
-  // Presentation helpers
-  const lines = useMemo(() => code.split("\n"), [code]);
 
   return (
     <div className="w-full min-h-screen bg-neutral-50 p-6 flex flex-col gap-4">
@@ -273,86 +269,21 @@ export default function ProjectionBoxesDemo() {
         </CardContent>
       </Card>
 
-      {/* Editor + Projection layer */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card className="shadow-sm">
-          <CardContent className="p-0">
-            <textarea
-              ref={editorRef}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Tab') {
-                  e.preventDefault();
-                  const target = e.target as HTMLTextAreaElement;
-                  const start = target.selectionStart;
-                  const end = target.selectionEnd;
-                  const newValue = code.substring(0, start) + '    ' + code.substring(end);
-                  setCode(newValue);
-                  // Set cursor position after the tab
-                  setTimeout(() => {
-                    target.selectionStart = target.selectionEnd = start + 4;
-                  }, 0);
-                }
-              }}
-              className="w-full h-[520px] resize-none font-mono text-sm p-4 outline-none border-0 rounded-t-2xl"
-              spellCheck={false}
-            />
-            <div className="border-t bg-neutral-50 px-4 py-2 text-xs text-neutral-600 flex items-center justify-between">
-              <div>Stdout: <span className="font-mono">{stdout ? stdout : "(empty)"}</span></div>
-              {error && <div className="text-red-600">{String(error)}</div>}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardContent className="p-0">
-            <div className="h-[560px] overflow-auto divide-y">
-              {lines.map((lineText, idx) => {
-                const b = filteredBoxes.find((x) => x.line === idx + 1);
-                return (
-                  <div key={idx} className="grid grid-cols-12 items-stretch" onMouseEnter={() => setHoverLine(idx + 1)} onMouseLeave={() => setHoverLine(null)}>
-                    {/* Code line number + text (readonly mirror for alignment) */}
-                    <div className="col-span-5 font-mono text-xs px-3 py-1 bg-white">
-                      <span className="text-neutral-400 select-none w-8 inline-block text-right mr-2">{idx + 1}</span>
-                      <span className="whitespace-pre">{lineText || "\u00a0"}</span>
-                    </div>
-
-                    {/* Projection box */}
-                    <div className="col-span-7 relative">
-                      {hoverLine === idx + 1 && (
-                        <motion.div
-                          className="absolute top-2 left-2 z-10 pointer-events-none"
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                        >
-                          <div className="scale-95 opacity-95">
-                            {b ? (
-                              <ProjectionBox
-                                box={b}
-                                orientation={orientation}
-                                rowMode={view === "row"}
-                                viewMode={view}
-                                dataFlowResults={view === "dataflow" ? dataFlowResults : undefined}
-                              />
-                            ) : (
-                              <div className="rounded-2xl shadow-sm bg-white ring-1 ring-neutral-200 p-4 text-xs text-neutral-500">
-                                <div className="font-medium mb-1">Line {idx + 1}</div>
-                                <div>No execution data available</div>
-                                <div className="text-[10px] mt-1">Run the code to see variable values</div>
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Unified Code Editor with Projection Boxes */}
+      <Card className="shadow-sm">
+        <CardContent className="p-0">
+          <UnifiedCodeEditor
+            code={code}
+            onCodeChange={setCode}
+            boxes={filteredBoxes}
+            view={view}
+            orientation={orientation}
+            dataFlowResults={view === "dataflow" ? dataFlowResults : undefined}
+            stdout={stdout}
+            error={error}
+          />
+        </CardContent>
+      </Card>
 
       <div className="text-xs text-neutral-500">
         Tip: Hover over code lines to see variable values. Press 1=Full view, 2=Scoped mode, 3=Data-flow mode. Run code to see execution data.
