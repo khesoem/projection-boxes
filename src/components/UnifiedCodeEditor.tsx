@@ -94,20 +94,32 @@ export function UnifiedCodeEditor({
 
   return (
     <div className="relative">
-      {/* Code Editor */}
-      <textarea
-        ref={editorRef}
-        value={code}
-        onChange={(e) => onCodeChange(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        className="w-full h-[520px] resize-none font-mono text-sm p-4 outline-none border-0 rounded-t-2xl bg-white"
-        spellCheck={false}
-        style={{ lineHeight: '20px' }}
-      />
+      {/* Code Editor with Line Numbers */}
+      <div className="flex h-[520px] bg-white rounded-t-2xl overflow-hidden">
+        {/* Line Numbers Gutter */}
+        <div className="flex-shrink-0 bg-neutral-50 border-r border-neutral-200 px-3 py-4 text-xs text-neutral-400 font-mono select-none overflow-hidden">
+          {lines.map((_, index) => (
+            <div key={index} className="h-5 leading-5 text-right">
+              {index + 1}
+            </div>
+          ))}
+        </div>
+        
+        {/* Code Editor */}
+        <textarea
+          ref={editorRef}
+          value={code}
+          onChange={(e) => onCodeChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          className="flex-1 h-full resize-none font-mono text-sm p-4 outline-none border-0 bg-white"
+          spellCheck={false}
+          style={{ lineHeight: '20px' }}
+        />
+      </div>
       
       {/* Projection Box Overlay */}
       {(hoverLine || focusedLine) && (
