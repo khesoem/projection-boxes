@@ -220,7 +220,7 @@ export default function ProjectionBoxesDemo() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl sm:text-2xl font-semibold">Enhanced Projection Boxes</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold">PrismBox</h1>
         </div>
         <div className="flex items-center gap-2">
           <StatusDot status={status} />
