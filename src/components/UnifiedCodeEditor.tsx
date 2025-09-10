@@ -98,11 +98,20 @@ export function UnifiedCodeEditor({
       <div className="flex h-[520px] bg-white rounded-t-2xl overflow-hidden">
         {/* Line Numbers Gutter */}
         <div className="flex-shrink-0 bg-neutral-50 border-r border-neutral-200 px-3 py-4 text-xs text-neutral-400 font-mono select-none overflow-hidden">
-          {lines.map((_, index) => (
-            <div key={index} className="h-5 leading-5 text-right">
-              {index + 1}
-            </div>
-          ))}
+          {lines.map((_, index) => {
+            const lineNumber = index + 1;
+            const isActive = (hoverLine === lineNumber) || (focusedLine === lineNumber);
+            return (
+              <div 
+                key={index} 
+                className={`h-5 leading-5 text-right ${
+                  isActive ? 'bg-blue-100 text-blue-600 font-semibold' : ''
+                }`}
+              >
+                {lineNumber}
+              </div>
+            );
+          })}
         </div>
         
         {/* Code Editor */}
@@ -120,6 +129,19 @@ export function UnifiedCodeEditor({
           style={{ lineHeight: '20px' }}
         />
       </div>
+      
+      {/* Line Highlight Overlay */}
+      {(hoverLine || focusedLine) && (
+        <div
+          className="absolute pointer-events-none bg-blue-50/50 border-l-2 border-blue-400"
+          style={{
+            left: '48px', // Account for line number gutter width
+            right: '0px',
+            top: `${16 + (Math.max(hoverLine || focusedLine || 1, 1) - 1) * 20}px`,
+            height: '20px'
+          }}
+        />
+      )}
       
       {/* Projection Box Overlay */}
       {(hoverLine || focusedLine) && (

@@ -219,10 +219,10 @@ export default function ProjectionBoxesDemo() {
       <div className="max-w-6xl mx-auto w-full flex flex-col gap-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 ml-16">
           <h1 className="text-xl sm:text-2xl font-semibold">PrismBox</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mr-16">
           <StatusDot status={status} />
           <Button onClick={run} className="gap-2"><Play className="w-4 h-4"/>Run</Button>
         </div>
