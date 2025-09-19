@@ -1,6 +1,6 @@
-# Projection Boxes - Web Prototype
+# PrismBox
 
-A React-based web application for visualizing Python code execution with variable tracking and data-flow analysis. This project demonstrates the concept of "projection boxes" - a novel way to visualize program state during execution.
+A React-based web application for visualizing Python code execution with variable tracking and data-flow analysis. This project demonstrates the concept of "adaptable projection boxes" - a novel way to visualize program state during execution.
 
 ## Features
 
@@ -11,7 +11,6 @@ A React-based web application for visualizing Python code execution with variabl
   - **Scoped View**: Only shows variables referenced on each specific line
   - **Data-flow View**: Visualizes variable dependencies with geometric shapes
 - **Interactive Controls**: Filter variables, change orientation, and customize the display
-- **Keyboard Shortcuts**: Press 1, 2, 3 for quick view switching
 
 ## Technology Stack
 
@@ -42,25 +41,6 @@ A React-based web application for visualizing Python code execution with variabl
 3. **Explore Variables**: Hover over code lines to see variable values in projection boxes
 4. **Switch Views**: Use the view controls to explore different visualization modes
 5. **Filter Variables**: Use the filter input to show/hide specific variables
-
-## Project Structure
-
-```
-src/
-├── components/          # React components
-│   ├── ProjectionBox.tsx    # Main visualization component
-│   ├── StatusDot.tsx        # Status indicator
-│   └── ui.tsx              # Reusable UI components
-├── hooks/               # Custom React hooks
-│   └── useCaretLine.ts     # Cursor position tracking
-├── utils/               # Utility functions
-│   ├── python.ts           # Python execution utilities
-│   └── dataFlow.ts         # Data-flow analysis
-├── types.ts             # TypeScript type definitions
-├── constants.ts         # Application constants
-├── App.tsx              # Main application component
-└── main.tsx             # Application entry point
-```
 
 ## Development
 
